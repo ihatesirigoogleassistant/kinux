@@ -1,0 +1,2 @@
+# kinux
+distro. 
