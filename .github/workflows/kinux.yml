@@ -37,6 +37,7 @@ jobs:
           sudo mount --bind /dev iso-build/dev
           sudo mount --bind /proc iso-build/proc
           sudo mount --bind /sys iso-build/sys
+          sudo rm -f iso-build/etc/resolv.conf
           sudo cp /etc/resolv.conf iso-build/etc/resolv.conf
           sudo chroot iso-build /bin/bash -c "
             apt update
