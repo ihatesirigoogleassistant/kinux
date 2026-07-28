@@ -26,8 +26,7 @@ jobs:
           _build/oils.sh
           mkdir -p ~/.local/bin
           cp _bin/cxx-opt-sh/oils-for-unix ~/.local/bin/
-          cd ..
-          rm -rf oils-for-unix-0.37.0
+          cd .. && rm -rf oils-for-unix-0.37.0
           export PATH="$HOME/.local/bin:$PATH"
           grep -q '.local/bin' ~/.bashrc || echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
           oils-for-unix --version
@@ -37,64 +36,26 @@ jobs:
           gcc bux.c -o bux -larchive -lcurl -lzstd -lpthread
           sudo mv bux /usr/local/bin/bux
 
-      - name: Download and extract cloud image
+      - name: Build ISO with custom script
         run: |
-          mkdir -p ~/iso-build/chroot
-          wget -qO ~/iso-build/noble-server-cloudimg-amd64-root.tar.xz https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64-root.tar.xz
-          sudo tar -xf ~/iso-build/noble-server-cloudimg-amd64-root.tar.xz -C ~/iso-build/chroot
-          rm ~/iso-build/noble-server-cloudimg-amd64-root.tar.xz
+          mkdir -p iso-build
+          wget -qO- https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64-root.tar.xz | sudo tar -xC iso-build
+          sudo cp /usr/local/bin/bux iso-build/usr/local/bin/
+          sudo cp ~/.local/bin/oils-for-unix iso-build/usr/local/bin/
+          sudo chroot iso-build useradd -m -s /usr/local/bin/oils-for-unix kinux
+          echo 'export PATH="/usr/local/bin:$PATH"' | sudo tee -a iso-build/home/kinux/.bashrc
+          sudo mksquashfs iso-build filesystem.squashfs -comp xz
+          mkdir -p iso
+          mv filesystem.squashfs iso/
+          cp /usr/lib/ISOLINUX/isolinux.bin iso/
+          cp /usr/lib/syslinux/modules/bios/ldlinux.c32 iso/
+          printf 'DEFAULT linux\nLABEL linux\n  KERNEL /vmlinuz\n  APPEND initrd=/initrd.img boot=live toram\n' > iso/isolinux.cfg
+          sudo cp iso-build/boot/vmlinuz-* iso/vmlinuz
+          sudo cp iso-build/boot/initrd.img-* iso/initrd.img
+          xorriso -as mkisofs -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin -c boot.cat -b isolinux.bin -no-emul-boot -boot-load-size 4 -boot-info-table -o kinux.iso iso
 
-      - name: Configure chroot
-        run: |
-          sudo mount --bind /dev ~/iso-build/chroot/dev
-          sudo mount --bind /dev/pts ~/iso-build/chroot/dev/pts
-          sudo mount --bind /proc ~/iso-build/chroot/proc
-          sudo mount --bind /sys ~/iso-build/chroot/sys
-          sudo rm -f ~/iso-build/chroot/etc/resolv.conf
-          sudo cp /etc/resolv.conf ~/iso-build/chroot/etc/resolv.conf
-          sudo chroot ~/iso-build/chroot /bin/bash -c "
-            apt update
-            apt install -y curl wpasupplicant libarchive13 libcurl4 libzstd1 initramfs-tools linux-image-generic casper isolinux
-            useradd -m -s /usr/local/bin/oils-for-unix kinux
-          "
-          sudo cp ~/.local/bin/oils-for-unix ~/iso-build/chroot/usr/local/bin/
-          sudo cp /usr/local/bin/bux ~/iso-build/chroot/usr/local/bin/
-          echo 'export PATH="/usr/local/bin:$PATH"' | sudo tee -a ~/iso-build/chroot/home/kinux/.bashrc
-          sudo umount ~/iso-build/chroot/dev/pts || true
-          sudo umount ~/iso-build/chroot/dev || true
-          sudo umount ~/iso-build/chroot/proc || true
-          sudo umount ~/iso-build/chroot/sys || true
-
-      - name: Prepare ISO structure
-        run: |
-          mkdir -p ~/iso-build/image/{casper,isolinux}
-          sudo mksquashfs ~/iso-build/chroot ~/iso-build/image/casper/filesystem.squashfs -comp xz -noappend
-          sudo cp ~/iso-build/chroot/boot/vmlinuz-* ~/iso-build/image/casper/vmlinuz
-          sudo cp ~/iso-build/chroot/boot/initrd.img-* ~/iso-build/image/casper/initrd
-          cp /usr/lib/ISOLINUX/isolinux.bin ~/iso-build/image/isolinux/
-          cp /usr/lib/syslinux/modules/bios/ldlinux.c32 ~/iso-build/image/isolinux/
-          cat > ~/iso-build/image/isolinux/isolinux.cfg << 'EOF'
-          DEFAULT linux
-          LABEL linux
-            KERNEL /casper/vmlinuz
-            APPEND initrd=/casper/initrd boot=casper quiet splash --
-          EOF
-
-      - name: Build ISO
-        run: |
-          cd ~/iso-build/image
-          xorriso -as mkisofs \
-            -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin \
-            -c isolinux/boot.cat \
-            -b isolinux/isolinux.bin \
-            -no-emul-boot \
-            -boot-load-size 4 \
-            -boot-info-table \
-            -o ~/kinux.iso \
-            .
-
-      - name: Upload ISO artifact
+      - name: Upload ISO
         uses: actions/upload-artifact@v4
         with:
           name: kinux-iso
-          path: ~/kinux.iso
+          path: kinux.iso
