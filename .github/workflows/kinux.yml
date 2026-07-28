@@ -36,7 +36,7 @@ jobs:
           sudo cp ~/.local/bin/oils-for-unix iso-build/usr/local/bin/
           sudo chroot iso-build useradd -m -s /usr/local/bin/oils-for-unix kinux
           echo 'export PATH="/usr/local/bin:$PATH"' | sudo tee -a iso-build/home/kinux/.bashrc
-          sudo mksquashfs iso-build filesystem.squashfs -comp xz
+          sudo mksquashfs iso-build filesystem.squashfs -comp xz -noappend
           mkdir -p iso
           mv filesystem.squashfs iso/
           cp /usr/lib/ISOLINUX/isolinux.bin iso/
