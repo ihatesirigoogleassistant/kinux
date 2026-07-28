@@ -25,13 +25,12 @@ jobs:
           rm -rf oils-for-unix-0.37.0
           export PATH="$HOME/.local/bin:$PATH"
           grep -q '.local/bin' ~/.bashrc || echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-          chsh -s ~/.local/bin/oils-for-unix
           oils-for-unix --version
 
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y wpasupplicant xorriso isolinux
+          sudo apt install -y wpasupplicant xorriso isolinux debootstrap squashfs-tools
 
       - name: Compile bux
         run: |
@@ -53,17 +52,16 @@ jobs:
           sudo chroot ~/iso-build/chroot /bin/bash -c "
             apt update
             apt install -y curl wpasupplicant
-            useradd -m -s /usr/local/bin/oils-for-unix kinux
+            useradd -m kinux
           "
 
-      - name: Copy oils to chroot
+      - name: Copy oils and bux to chroot
         run: |
           sudo cp ~/.local/bin/oils-for-unix ~/iso-build/chroot/usr/local/bin/
           sudo cp /usr/local/bin/bux ~/iso-build/chroot/usr/local/bin/
           sudo chroot ~/iso-build/chroot /bin/bash -c "
-            chsh -s /usr/local/bin/oils-for-unix kinux
+            usermod -s /usr/local/bin/oils-for-unix kinux
             echo 'export PATH=\"/usr/local/bin:\$PATH\"' >> /home/kinux/.bashrc
-            grep -q '/usr/local/bin' /home/kinux/.bashrc || echo 'export PATH=\"/usr/local/bin:\$PATH\"' >> /home/kinux/.bashrc
           "
 
       - name: Cleanup chroot mounts
