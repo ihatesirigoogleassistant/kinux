@@ -9,21 +9,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y wpasupplicant xorriso isolinux squashfs-tools libarchive-dev libcurl4-openssl-dev libzstd-dev
+      - run: sudo apt update && sudo apt install -y wpasupplicant xorriso isolinux squashfs-tools libarchive-dev libcurl4-openssl-dev libzstd-dev xz-utils
 
-      - name: Install Oils for Unix
-        run: |
+      - run: |
           cd /tmp
           wget -qO- https://oils.pub/download/oils-for-unix-0.37.0.tar.gz | tar -xz
           cd oils-for-unix-0.37.0
-          ./configure
-          _build/oils.sh
+          ./configure && _build/oils.sh
           mkdir -p ~/.local/bin
           cp _bin/cxx-opt-sh/oils-for-unix ~/.local/bin/
           cd .. && rm -rf oils-for-unix-0.37.0
@@ -31,15 +25,13 @@ jobs:
           grep -q '.local/bin' ~/.bashrc || echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
           oils-for-unix --version
 
-      - name: Compile bux
-        run: |
-          gcc bux.c -o bux -larchive -lcurl -lzstd -lpthread
-          sudo mv bux /usr/local/bin/bux
+      - run: gcc bux.c -o bux -larchive -lcurl -lzstd -lpthread && sudo mv bux /usr/local/bin/bux
 
-      - name: Build ISO with custom script
-        run: |
+      - run: |
           mkdir -p iso-build
-          wget -qO- https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64-root.tar.xz | sudo tar -xC iso-build
+          wget -qO noble-root.tar.xz https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64-root.tar.xz
+          sudo tar -xJf noble-root.tar.xz -C iso-build
+          rm noble-root.tar.xz
           sudo cp /usr/local/bin/bux iso-build/usr/local/bin/
           sudo cp ~/.local/bin/oils-for-unix iso-build/usr/local/bin/
           sudo chroot iso-build useradd -m -s /usr/local/bin/oils-for-unix kinux
@@ -54,8 +46,7 @@ jobs:
           sudo cp iso-build/boot/initrd.img-* iso/initrd.img
           xorriso -as mkisofs -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin -c boot.cat -b isolinux.bin -no-emul-boot -boot-load-size 4 -boot-info-table -o kinux.iso iso
 
-      - name: Upload ISO
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: kinux-iso
           path: kinux.iso
