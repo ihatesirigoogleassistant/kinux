@@ -56,6 +56,7 @@ jobs:
           printf 'DEFAULT linux\nLABEL linux\n  KERNEL /vmlinuz\n  APPEND initrd=/initrd.img boot=live toram\n' > iso/isolinux.cfg
           sudo cp iso-build/boot/vmlinuz-* iso/vmlinuz
           sudo cp iso-build/boot/initrd.img-* iso/initrd.img
+          sudo chmod 644 iso/vmlinuz iso/initrd.img
           xorriso -as mkisofs -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin -c boot.cat -b isolinux.bin -no-emul-boot -boot-load-size 4 -boot-info-table -o kinux.iso iso
 
       - uses: actions/upload-artifact@v4
