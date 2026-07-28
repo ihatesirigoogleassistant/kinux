@@ -15,7 +15,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y wpasupplicant xorriso isolinux squashfs-tools libarchive-dev libcurl4-openssl-dev libzstd-dev cloud-image-utils
+          sudo apt install -y wpasupplicant xorriso isolinux squashfs-tools libarchive-dev libcurl4-openssl-dev libzstd-dev
 
       - name: Install Oils for Unix
         run: |
@@ -50,6 +50,7 @@ jobs:
           sudo mount --bind /dev/pts ~/iso-build/chroot/dev/pts
           sudo mount --bind /proc ~/iso-build/chroot/proc
           sudo mount --bind /sys ~/iso-build/chroot/sys
+          sudo rm -f ~/iso-build/chroot/etc/resolv.conf
           sudo cp /etc/resolv.conf ~/iso-build/chroot/etc/resolv.conf
           sudo chroot ~/iso-build/chroot /bin/bash -c "
             apt update
