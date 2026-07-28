@@ -12,6 +12,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y wpasupplicant xorriso isolinux debootstrap squashfs-tools libarchive-dev
+
       - name: Install Oils for Unix
         run: |
           cd /tmp
@@ -27,14 +32,9 @@ jobs:
           grep -q '.local/bin' ~/.bashrc || echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
           oils-for-unix --version
 
-      - name: Install dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y wpasupplicant xorriso isolinux debootstrap squashfs-tools
-
       - name: Compile bux
         run: |
-          gcc bux.c -o bux
+          gcc bux.c -o bux -larchive
           sudo mv bux /usr/local/bin/bux
 
       - name: Create working directory
