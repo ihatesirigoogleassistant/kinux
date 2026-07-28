@@ -15,7 +15,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y wpasupplicant xorriso isolinux debootstrap squashfs-tools libarchive-dev libcurl4-openssl-dev libzstd-dev
+          sudo apt install -y wpasupplicant xorriso isolinux squashfs-tools libarchive-dev libcurl4-openssl-dev libzstd-dev cloud-image-utils
 
       - name: Install Oils for Unix
         run: |
@@ -37,12 +37,14 @@ jobs:
           gcc bux.c -o bux -larchive -lcurl -lzstd -lpthread
           sudo mv bux /usr/local/bin/bux
 
-      - name: Create working directory
+      - name: Download and extract cloud image
         run: |
-          mkdir -p ~/iso-build
-          sudo debootstrap --arch=amd64 noble ~/iso-build/chroot http://archive.ubuntu.com/ubuntu/
+          mkdir -p ~/iso-build/chroot
+          wget -qO ~/iso-build/noble-server-cloudimg-amd64-root.tar.xz https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64-root.tar.xz
+          sudo tar -xf ~/iso-build/noble-server-cloudimg-amd64-root.tar.xz -C ~/iso-build/chroot
+          rm ~/iso-build/noble-server-cloudimg-amd64-root.tar.xz
 
-      - name: Configure chroot environment
+      - name: Configure chroot
         run: |
           sudo mount --bind /dev ~/iso-build/chroot/dev
           sudo mount --bind /dev/pts ~/iso-build/chroot/dev/pts
@@ -51,21 +53,12 @@ jobs:
           sudo cp /etc/resolv.conf ~/iso-build/chroot/etc/resolv.conf
           sudo chroot ~/iso-build/chroot /bin/bash -c "
             apt update
-            apt install -y curl wpasupplicant libarchive13 libcurl4 libzstd1
-            useradd -m kinux
+            apt install -y curl wpasupplicant libarchive13 libcurl4 libzstd1 initramfs-tools linux-image-generic casper isolinux
+            useradd -m -s /usr/local/bin/oils-for-unix kinux
           "
-
-      - name: Copy oils and bux to chroot
-        run: |
           sudo cp ~/.local/bin/oils-for-unix ~/iso-build/chroot/usr/local/bin/
           sudo cp /usr/local/bin/bux ~/iso-build/chroot/usr/local/bin/
-          sudo chroot ~/iso-build/chroot /bin/bash -c "
-            usermod -s /usr/local/bin/oils-for-unix kinux
-            echo 'export PATH=\"/usr/local/bin:\$PATH\"' >> /home/kinux/.bashrc
-          "
-
-      - name: Cleanup chroot mounts
-        run: |
+          echo 'export PATH="/usr/local/bin:$PATH"' | sudo tee -a ~/iso-build/chroot/home/kinux/.bashrc
           sudo umount ~/iso-build/chroot/dev/pts || true
           sudo umount ~/iso-build/chroot/dev || true
           sudo umount ~/iso-build/chroot/proc || true
@@ -73,15 +66,12 @@ jobs:
 
       - name: Prepare ISO structure
         run: |
-          mkdir -p ~/iso-build/image/{casper,isolinux,install}
-          sudo mksquashfs ~/iso-build/chroot ~/iso-build/image/casper/filesystem.squashfs -comp xz
+          mkdir -p ~/iso-build/image/{casper,isolinux}
+          sudo mksquashfs ~/iso-build/chroot ~/iso-build/image/casper/filesystem.squashfs -comp xz -noappend
           sudo cp ~/iso-build/chroot/boot/vmlinuz-* ~/iso-build/image/casper/vmlinuz
           sudo cp ~/iso-build/chroot/boot/initrd.img-* ~/iso-build/image/casper/initrd
           cp /usr/lib/ISOLINUX/isolinux.bin ~/iso-build/image/isolinux/
           cp /usr/lib/syslinux/modules/bios/ldlinux.c32 ~/iso-build/image/isolinux/
-
-      - name: Create isolinux configuration
-        run: |
           cat > ~/iso-build/image/isolinux/isolinux.cfg << 'EOF'
           DEFAULT linux
           LABEL linux
@@ -99,10 +89,6 @@ jobs:
             -no-emul-boot \
             -boot-load-size 4 \
             -boot-info-table \
-            -eltorito-alt-boot \
-            -e boot/grub/efi.img \
-            -no-emul-boot \
-            -isohybrid-gpt-basdat \
             -o ~/kinux.iso \
             .
 
