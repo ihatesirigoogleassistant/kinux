@@ -1,0 +1,115 @@
+name: Build Kinux ISO
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Oils for Unix
+        run: |
+          cd /tmp
+          wget -qO- https://oils.pub/download/oils-for-unix-0.37.0.tar.gz | tar -xz
+          cd oils-for-unix-0.37.0
+          ./configure
+          _build/oils.sh
+          mkdir -p ~/.local/bin
+          cp _bin/cxx-opt-sh/oils-for-unix ~/.local/bin/
+          cd ..
+          rm -rf oils-for-unix-0.37.0
+          export PATH="$HOME/.local/bin:$PATH"
+          grep -q '.local/bin' ~/.bashrc || echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+          chsh -s ~/.local/bin/oils-for-unix
+          oils-for-unix --version
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y wpasupplicant xorriso isolinux
+
+      - name: Compile bux
+        run: |
+          gcc bux.c -o bux
+          sudo mv bux /usr/local/bin/bux
+
+      - name: Create working directory
+        run: |
+          mkdir -p ~/iso-build
+          sudo debootstrap --arch=amd64 noble ~/iso-build/chroot http://archive.ubuntu.com/ubuntu/
+
+      - name: Configure chroot environment
+        run: |
+          sudo mount --bind /dev ~/iso-build/chroot/dev
+          sudo mount --bind /dev/pts ~/iso-build/chroot/dev/pts
+          sudo mount --bind /proc ~/iso-build/chroot/proc
+          sudo mount --bind /sys ~/iso-build/chroot/sys
+          sudo cp /etc/resolv.conf ~/iso-build/chroot/etc/resolv.conf
+          sudo chroot ~/iso-build/chroot /bin/bash -c "
+            apt update
+            apt install -y curl wpasupplicant
+            useradd -m -s /usr/local/bin/oils-for-unix kinux
+          "
+
+      - name: Copy oils to chroot
+        run: |
+          sudo cp ~/.local/bin/oils-for-unix ~/iso-build/chroot/usr/local/bin/
+          sudo cp /usr/local/bin/bux ~/iso-build/chroot/usr/local/bin/
+          sudo chroot ~/iso-build/chroot /bin/bash -c "
+            chsh -s /usr/local/bin/oils-for-unix kinux
+            echo 'export PATH=\"/usr/local/bin:\$PATH\"' >> /home/kinux/.bashrc
+            grep -q '/usr/local/bin' /home/kinux/.bashrc || echo 'export PATH=\"/usr/local/bin:\$PATH\"' >> /home/kinux/.bashrc
+          "
+
+      - name: Cleanup chroot mounts
+        run: |
+          sudo umount ~/iso-build/chroot/dev/pts || true
+          sudo umount ~/iso-build/chroot/dev || true
+          sudo umount ~/iso-build/chroot/proc || true
+          sudo umount ~/iso-build/chroot/sys || true
+
+      - name: Prepare ISO structure
+        run: |
+          mkdir -p ~/iso-build/image/{casper,isolinux,install}
+          sudo mksquashfs ~/iso-build/chroot ~/iso-build/image/casper/filesystem.squashfs -comp xz
+          sudo cp ~/iso-build/chroot/boot/vmlinuz-* ~/iso-build/image/casper/vmlinuz
+          sudo cp ~/iso-build/chroot/boot/initrd.img-* ~/iso-build/image/casper/initrd
+          cp /usr/lib/ISOLINUX/isolinux.bin ~/iso-build/image/isolinux/
+          cp /usr/lib/syslinux/modules/bios/ldlinux.c32 ~/iso-build/image/isolinux/
+
+      - name: Create isolinux configuration
+        run: |
+          cat > ~/iso-build/image/isolinux/isolinux.cfg << 'EOF'
+          DEFAULT linux
+          LABEL linux
+            KERNEL /casper/vmlinuz
+            APPEND initrd=/casper/initrd boot=casper quiet splash --
+          EOF
+
+      - name: Build ISO
+        run: |
+          cd ~/iso-build/image
+          xorriso -as mkisofs \
+            -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin \
+            -c isolinux/boot.cat \
+            -b isolinux/isolinux.bin \
+            -no-emul-boot \
+            -boot-load-size 4 \
+            -boot-info-table \
+            -eltorito-alt-boot \
+            -e boot/grub/efi.img \
+            -no-emul-boot \
+            -isohybrid-gpt-basdat \
+            -o ~/kinux.iso \
+            .
+
+      - name: Upload ISO artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kinux-iso
+          path: ~/kinux.iso
