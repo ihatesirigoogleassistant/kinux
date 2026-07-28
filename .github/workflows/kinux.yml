@@ -15,7 +15,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y wpasupplicant xorriso isolinux debootstrap squashfs-tools libarchive-dev
+          sudo apt install -y wpasupplicant xorriso isolinux debootstrap squashfs-tools libarchive-dev libcurl4-openssl-dev libzstd-dev
 
       - name: Install Oils for Unix
         run: |
@@ -34,7 +34,7 @@ jobs:
 
       - name: Compile bux
         run: |
-          gcc bux.c -o bux -larchive
+          gcc bux.c -o bux -larchive -lcurl -lzstd -lpthread
           sudo mv bux /usr/local/bin/bux
 
       - name: Create working directory
@@ -51,7 +51,7 @@ jobs:
           sudo cp /etc/resolv.conf ~/iso-build/chroot/etc/resolv.conf
           sudo chroot ~/iso-build/chroot /bin/bash -c "
             apt update
-            apt install -y curl wpasupplicant
+            apt install -y curl wpasupplicant libarchive13 libcurl4 libzstd1
             useradd -m kinux
           "
 
