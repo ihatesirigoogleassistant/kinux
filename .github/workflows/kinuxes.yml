@@ -11,16 +11,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - run: sudo apt update && sudo apt install -y squashfs-tools libarchive-dev libcurl4-openssl-dev libzstd-dev xz-utils libjson-c-dev
+      - run: sudo apt update && sudo apt install -y libarchive-dev libcurl4-openssl-dev libzstd-dev xz-utils libjson-c-dev
 
-      - run: |
-          cd /tmp
-          wget -qO- https://oils.pub/download/oils-for-unix-0.37.0.tar.gz | tar -xz
-          cd oils-for-unix-0.37.0 && ./configure && _build/oils.sh
-          mkdir -p ~/.local/bin && cp _bin/cxx-opt-sh/oils-for-unix ~/.local/bin/
-          cd .. && rm -rf oils-for-unix-0.37.0
-
-      - run: gcc bux-v1.c -o bux -larchive -lcurl -lzstd -lpthread -ljson-c && sudo mv bux /usr/local/bin/bux
+      - run: gcc bux-v1.c -o bux -larchive -lcurl -lzstd -lpthread -ljson-c
 
       - run: |
           mkdir -p alpine-root
@@ -28,19 +21,26 @@ jobs:
           sudo tar -xzf alpine-minirootfs.tar.gz -C alpine-root
           rm alpine-minirootfs.tar.gz
           sudo cp /etc/resolv.conf alpine-root/etc/resolv.conf
+          sudo cp bux alpine-root/tmp/
           sudo chroot alpine-root /bin/sh -c "
-            apk add curl wpa_supplicant
+            apk add curl wpa_supplicant build-base
+            cd /tmp
+            wget -qO- https://oils.pub/download/oils-for-unix-0.37.0.tar.gz | tar -xz
+            cd oils-for-unix-0.37.0 && ./configure && _build/oils.sh
+            cp _bin/cxx-opt-sh/oils-for-unix /usr/local/bin/
+            cd /tmp && rm -rf oils-for-unix-0.37.0
+            gcc bux -o /usr/local/bin/bux -larchive -lcurl -lzstd -lpthread -ljson-c
+            rm /tmp/bux
+            apk del build-base
             adduser -D -s /usr/local/bin/oils-for-unix kinux
           "
-          sudo cp /usr/local/bin/bux alpine-root/usr/local/bin/
-          sudo cp ~/.local/bin/oils-for-unix alpine-root/usr/local/bin/
           echo 'export PATH="/usr/local/bin:$PATH"' | sudo tee -a alpine-root/home/kinux/.profile
           sudo rm -rf alpine-root/var/cache/apk
           sudo tar -cJf kinux-rootfs.tar.xz -C alpine-root .
-          mkdir -p ~/artifacts
-          sudo mv kinux-rootfs.tar.xz ~/artifacts/
+          mkdir -p artifacts
+          sudo mv kinux-rootfs.tar.xz artifacts/
 
       - uses: actions/upload-artifact@v4
         with:
           name: kinux-rootfs
-          path: ~/artifacts/kinux-rootfs.tar.xz
+          path: artifacts/kinux-rootfs.tar.xz
