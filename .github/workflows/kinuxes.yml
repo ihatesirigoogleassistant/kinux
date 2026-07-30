@@ -36,9 +36,9 @@ jobs:
           sudo cp ~/.local/bin/oils-for-unix alpine-root/usr/local/bin/
           echo 'export PATH="/usr/local/bin:$PATH"' | sudo tee -a alpine-root/home/kinux/.profile
           sudo rm -rf alpine-root/var/cache/apk
-          tar -cJf kinux-rootfs.tar.xz -C alpine-root .
+          sudo tar -cJf kinux-rootfs.tar.xz -C alpine-root .
           mkdir -p ~/artifacts
-          mv kinux-rootfs.tar.xz ~/artifacts/
+          sudo mv kinux-rootfs.tar.xz ~/artifacts/
 
       - uses: actions/upload-artifact@v4
         with:
